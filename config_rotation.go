@@ -122,10 +122,22 @@ func generateNewCert(hostname string, parent *x509.Certificate) ([]byte, []byte,
 			net.ParseIP("127.0.0.1"),
 		},
 
-		NotBefore:   time.Now(),
-		NotAfter:    time.Now().AddDate(5, 5, 5),
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().AddDate(5, 5, 5),
+		ExtKeyUsage: func(parent *x509.Certificate) []x509.ExtKeyUsage {
+			if parent == nil {
+				return []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageEmailProtection}
+			} else {
+				return []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageEmailProtection}
+			}
+		}(parent),
+		KeyUsage: func(parent *x509.Certificate) x509.KeyUsage {
+			if parent == nil {
+				return x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageDataEncipherment
+			} else {
+				return x509.KeyUsageDigitalSignature | x509.KeyUsageDataEncipherment
+			}
+		}(parent),
 	}
 
 	privatekey, err := rsa.GenerateKey(rand.Reader, 2048)
