@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -28,7 +27,10 @@ var (
 
 type configController struct {
 	sync.Mutex
-	config *tls.Config
+	config    *tls.Config
+	caCertPEM []byte
+	caKeyPEM  []byte
+	caCert    *tls.Certificate
 }
 
 func (c *configController) Get() *tls.Config {
@@ -38,16 +40,35 @@ func (c *configController) Get() *tls.Config {
 	return c.config
 }
 
-func (c *configController) Set(version uint16, cert, key []byte) error {
+func (c *configController) SaveCACertKey(cert, key []byte) {
+	c.Lock()
+	c.caCertPEM = cert
+	c.caKeyPEM = key
+	defer c.Unlock()
+}
+
+func (c *configController) Set(hostname string, version uint16, cert, key []byte, override bool) error {
 	c.Lock()
 	defer c.Unlock()
 
-	certAndKey, err := tls.X509KeyPair(cert, key)
+	var certAndKey tls.Certificate
+	var err error
+	if override {
+		log.Printf("Using Saved CA Certs \n")
+		certAndKey, err = tls.X509KeyPair(c.caCertPEM, c.caKeyPEM)
+	} else {
+		log.Printf("Using Newly Generated Certs \n")
+		certAndKey, err = tls.X509KeyPair(cert, key)
+	}
 	if err != nil {
 		return err
 	}
 
 	c.config = &tls.Config{
+		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			log.Printf("\tcalling GetCertificate:\n")
+			return &certAndKey, nil
+		},
 		GetConfigForClient: func(hi *tls.ClientHelloInfo) (*tls.Config, error) {
 			log.Printf("calling GetConfigForClient:\n")
 			serverConf := &tls.Config{
@@ -56,8 +77,9 @@ func (c *configController) Set(version uint16, cert, key []byte) error {
 				ClientAuth:            tls.RequireAndVerifyClientCert,
 				ClientCAs:             rootCAs,
 				VerifyPeerCertificate: getClientValidator(hi),
-				ServerName:            "mbp2018-8.local",
+				ServerName:            hostname,
 			}
+			serverConf.BuildNameToCertificate()
 			return serverConf, nil
 		},
 		PreferServerCipherSuites: true,
@@ -88,13 +110,12 @@ func generatePKIXName(serial int64, organization []byte, common string) pkix.Nam
 func generateNewCert(hostname string, parent *x509.Certificate) ([]byte, []byte, *x509.Certificate, []byte, error) {
 
 	serialCount++
-	organization := make([]byte, 32)
 
+	var organization []byte
 	if parent == nil {
 		organization = []byte("Rob-Root-CA")
 	} else {
-		rand.Read(organization)
-		organization = []byte(base64.URLEncoding.EncodeToString(organization))
+		organization = []byte("Rob-Client-" + strconv.Itoa(int(serialCount)))
 	}
 
 	template := &x509.Certificate{
@@ -109,7 +130,7 @@ func generateNewCert(hostname string, parent *x509.Certificate) ([]byte, []byte,
 			if parent == nil {
 				return true
 			} else {
-				return false
+				return true
 			}
 		}(parent),
 		SubjectKeyId: []byte{1},
@@ -118,12 +139,11 @@ func generateNewCert(hostname string, parent *x509.Certificate) ([]byte, []byte,
 		Issuer:       generatePKIXName(serialCount, organization, hostname),
 		DNSNames:     []string{hostname},
 		IPAddresses: []net.IP{
-			net.ParseIP("192.168.1.15"),
 			net.ParseIP("127.0.0.1"),
 		},
 
 		NotBefore: time.Now(),
-		NotAfter:  time.Now().AddDate(5, 5, 5),
+		NotAfter:  time.Now().AddDate(1, 0, 0), // expire one year from now
 		ExtKeyUsage: func(parent *x509.Certificate) []x509.ExtKeyUsage {
 			if parent == nil {
 				return []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageEmailProtection}
@@ -181,31 +201,38 @@ func getClientValidator(helloInfo *tls.ClientHelloInfo) func([][]byte, [][]*x509
 			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 			DNSName:       strings.Split(helloInfo.Conn.RemoteAddr().String(), ":")[0],
 		}
-		_, err := verifiedChains[0][0].Verify(opts)
-		if err != nil {
-			log.Printf("Verified failed: %s\n", err)
+
+		var err error
+		if len(verifiedChains) > 0 {
+			_, err = verifiedChains[0][0].Verify(opts)
+			if err != nil {
+				log.Printf("Verified failed: %s\n", err)
+			} else {
+				log.Printf("Verified\n")
+			}
 		} else {
-			log.Printf("Verified\n")
+			log.Printf("No Verified Chains, can't verifiy...\n")
 		}
-		return nil //err
+		return err
 	}
 }
 
 func main() {
 
 	var hostname string
-	flag.StringVar(&hostname, "host", "mbp2018-8.local", "hostname to use for X509 Certificate Common Name")
+	flag.StringVar(&hostname, "host", "localhost", "hostname to use for X509 Certificate Common Name")
+	overrideCAForConfig := flag.Bool("useCACerts", false, "use CA Certs instead of dynamically generated cert/key for config")
 	flag.Parse()
 
 	rootCAs = x509.NewCertPool()
 
 	rootPEM, err := ioutil.ReadFile("./CAfile.txt")
 	var rootCACert *x509.Certificate
+	var c, k, rootCACertDER []byte
 
 	if err != nil {
 		// Generate a root CA Certificate and write it to disk so a client app can add it to it's RootCA
 		fmt.Printf("Generating NEW Root Cerificate Authority\n")
-		var c, k, rootCACertDER []byte
 		c, k, rootCACert, rootCACertDER, err = generateNewCert(hostname, nil)
 		err = ioutil.WriteFile("./CAfile.txt", c, 0644)
 		err = ioutil.WriteFile("./CAkey.txt", k, 0644)
@@ -229,6 +256,18 @@ func main() {
 			log.Printf("Failed to Parse cert der file: %s\n", err)
 			os.Exit(1)
 		}
+
+		c, err = ioutil.ReadFile("./CAfile.txt")
+		if err != nil {
+			log.Printf("Failed to read cert PEM  file: %s\n", err)
+			os.Exit(1)
+		}
+
+		k, err = ioutil.ReadFile("./CAkey.txt")
+		if err != nil {
+			log.Printf("Failed to read key  PEM  file: %s\n", err)
+			os.Exit(1)
+		}
 	}
 
 	if rootCACert == nil {
@@ -236,6 +275,7 @@ func main() {
 		os.Exit(1)
 	}
 	configController := &configController{}
+	configController.SaveCACertKey(c, k)
 	network := hostname + ":8000"
 	listener, err := net.Listen("tcp", network)
 	if err != nil {
@@ -245,6 +285,7 @@ func main() {
 
 	var currentVersion uint16
 	done := make(chan struct{})
+
 	go func() {
 		ticker := time.NewTicker(5000 * time.Millisecond)
 		defer ticker.Stop()
@@ -259,8 +300,11 @@ func main() {
 					continue
 				} else {
 					if clientCount == 0 {
-						err = ioutil.WriteFile(fmt.Sprintf("./clientCert-%d.txt", clientCount), cert, 0644)
-						err = ioutil.WriteFile(fmt.Sprintf("./clientKey-%d.txt", clientCount), key, 0644)
+						// Only write it if it doesn't exist... otherwise we overwrite an installed KeyChain trusted Cert/Key
+						if _, err := os.Stat("./clientCert-0.txt"); os.IsNotExist(err) {
+							err = ioutil.WriteFile(fmt.Sprintf("./clientCert-%d.txt", clientCount), cert, 0644)
+							err = ioutil.WriteFile(fmt.Sprintf("./clientKey-%d.txt", clientCount), key, 0644)
+						}
 						clientCount++
 					}
 				}
@@ -268,7 +312,7 @@ func main() {
 				currentVersion = tls.VersionSSL30
 
 				// trivial example of setting a value in the configController...
-				err = configController.Set(currentVersion, cert, key)
+				err = configController.Set(hostname, currentVersion, cert, key, *overrideCAForConfig)
 				if err != nil {
 					fmt.Printf("error when loading cert: %v", err)
 				}
@@ -278,7 +322,6 @@ func main() {
 		}
 	}()
 	defer close(done)
-
 	// loop for incoming connections
 	for {
 		conn, err := listener.Accept()
