@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -15,8 +16,21 @@ func main() {
 	// have one. It's also possible to omit this in order to use the
 	// default root set of the current operating system.
 
-	//cert, err := tls.LoadX509KeyPair("./clientCert-0.txt", "./clientKey-0.txt")
-	cert, err := tls.LoadX509KeyPair("./CAfile.txt", "./CAkey.txt")
+	var hostname string
+	useCA := flag.Bool("useCACerts", false, "use CA Certs instead of dynamically generated cert/key for config")
+	flag.StringVar(&hostname, "host", "localhost", "hostname to use for X509 Certificate Common Name")
+	flag.Parse()
+
+	var err error
+	var cert tls.Certificate
+	if *useCA {
+		log.Printf("Using CA CertKey\n")
+		cert, err = tls.LoadX509KeyPair("./CAfile.txt", "./CAkey.txt")
+	} else {
+		log.Printf("Using Client-0 CertKey\n")
+		cert, err = tls.LoadX509KeyPair("./clientCert-0.txt", "./clientKey-0.txt")
+	}
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,14 +42,16 @@ func main() {
 		panic("failed to parse root certificate")
 	}
 
-	conn, err := tls.Dial("tcp", "mbp2018-8.local:8000", &tls.Config{
+	conn, err := tls.Dial("tcp", hostname+":8000", &tls.Config{
 		RootCAs:            roots,
 		Certificates:       []tls.Certificate{cert},
-		InsecureSkipVerify: true, //false,
-		ServerName:         "mbp2018-8.local",
+		InsecureSkipVerify: false,
+		ServerName:         hostname,
 	})
 	if err != nil {
 		panic("failed to connect: " + err.Error())
+	} else {
+		fmt.Printf("connection Dialed, attempting to write...\n")
 	}
 
 	var data []byte = make([]byte, 1024)
@@ -46,5 +62,6 @@ func main() {
 		fmt.Printf("read: [%s]\n", data)
 	}
 	conn.Close()
+	fmt.Printf("closed\n")
 
 }
