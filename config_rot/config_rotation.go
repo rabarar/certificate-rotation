@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -11,13 +9,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/big"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rabarar/goca"
 )
 
 var (
@@ -107,88 +106,6 @@ func generatePKIXName(serial int64, organization []byte, common string) pkix.Nam
 	return pkixName
 }
 
-func generateNewCert(hostname string, parent *x509.Certificate) ([]byte, []byte, *x509.Certificate, []byte, error) {
-
-	serialCount++
-
-	var organization []byte
-	if parent == nil {
-		organization = []byte("Rob-Root-CA")
-	} else {
-		organization = []byte("Rob-Client-" + strconv.Itoa(int(serialCount)))
-	}
-
-	template := &x509.Certificate{
-		IsCA: func(parent *x509.Certificate) bool {
-			if parent == nil {
-				return true
-			} else {
-				return false
-			}
-		}(parent),
-		BasicConstraintsValid: func(parent *x509.Certificate) bool {
-			if parent == nil {
-				return true
-			} else {
-				return true
-			}
-		}(parent),
-		SubjectKeyId: []byte{1},
-		SerialNumber: big.NewInt(serialCount),
-		Subject:      generatePKIXName(serialCount, organization, hostname),
-		Issuer:       generatePKIXName(serialCount, organization, hostname),
-		DNSNames:     []string{hostname},
-		IPAddresses: []net.IP{
-			net.ParseIP("127.0.0.1"),
-		},
-
-		NotBefore: time.Now(),
-		NotAfter:  time.Now().AddDate(1, 0, 0), // expire one year from now
-		ExtKeyUsage: func(parent *x509.Certificate) []x509.ExtKeyUsage {
-			if parent == nil {
-				return []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageEmailProtection}
-			} else {
-				return []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageEmailProtection}
-			}
-		}(parent),
-		KeyUsage: func(parent *x509.Certificate) x509.KeyUsage {
-			if parent == nil {
-				return x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageDataEncipherment
-			} else {
-				return x509.KeyUsageDigitalSignature | x509.KeyUsageDataEncipherment
-			}
-		}(parent),
-	}
-
-	privatekey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, nil, nil, []byte{}, err
-	}
-	publickey := &privatekey.PublicKey
-	certDER, err := x509.CreateCertificate(rand.Reader, template,
-		func(parent, template *x509.Certificate) *x509.Certificate {
-			if parent == nil {
-				return template
-			} else {
-				return parent
-			}
-		}(parent, template),
-		publickey, privatekey)
-
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return nil, nil, nil, []byte{}, err
-	}
-
-	return pem.EncodeToMemory(&pem.Block{
-			Type: "CERTIFICATE", Bytes: certDER}),
-		pem.EncodeToMemory(&pem.Block{
-			Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privatekey)}),
-		cert,
-		certDER,
-		err
-}
-
 func getClientValidator(helloInfo *tls.ClientHelloInfo) func([][]byte, [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		log.Printf("calling validator\n")
@@ -220,54 +137,67 @@ func getClientValidator(helloInfo *tls.ClientHelloInfo) func([][]byte, [][]*x509
 func main() {
 
 	var hostname string
+	var caKey = flag.String("ca-key", "goca-key.pem", "Root private key filename, PEM encoded.")
+	var caCert = flag.String("ca-cert", "goca.pem", "Root certificate filename, PEM encoded.")
+	var caCertDER = flag.String("ca-cert-der", "goca.der", "Root certificate filename, DER encoded.")
+	var domains = flag.String("domains", "", "Comma separated domain names to include as Server Alternative Names.")
+	var ipAddresses = flag.String("ip-addresses", "", "Comma separated IP addresses to include as Server Alternative Names.")
+
 	flag.StringVar(&hostname, "host", "localhost", "hostname to use for X509 Certificate Common Name")
 	overrideCAForConfig := flag.Bool("useCACerts", false, "use CA Certs instead of dynamically generated cert/key for config")
+	makeCA := flag.Bool("makeCA", false, "Generatedcert/key for CA")
 	flag.Parse()
 
-	rootCAs = x509.NewCertPool()
+	if *makeCA == true {
+		err := goca.MakeIssuer(*caKey, *caCert, *caCertDER)
+		if err != nil {
+			fmt.Printf("%s\n", err)
+			os.Exit(1)
+		} else {
+			fmt.Printf("Issuer generated\n")
+		}
+		os.Exit(0)
+	}
 
-	rootPEM, err := ioutil.ReadFile("./CAfile.txt")
+	issuer, err := goca.GetIssuer(*caKey, *caCert)
+	if err != nil {
+		fmt.Printf("failed to get issuer cert or key\n")
+		os.Exit(1)
+	}
+
+	rootCAs, err := x509.SystemCertPool()
+	rootPEM, err := ioutil.ReadFile(*caCert)
 	var rootCACert *x509.Certificate
 	var c, k, rootCACertDER []byte
 
+	fmt.Printf("Using EXISTING Root Cerificate Authority\n")
+	ok := rootCAs.AppendCertsFromPEM(rootPEM)
+	if !ok {
+		log.Printf("Failed to Parse cert: %s\n", err)
+		os.Exit(1)
+	}
+
+	rootCACertDER, err = ioutil.ReadFile(*caCertDER)
 	if err != nil {
-		// Generate a root CA Certificate and write it to disk so a client app can add it to it's RootCA
-		fmt.Printf("Generating NEW Root Cerificate Authority\n")
-		c, k, rootCACert, rootCACertDER, err = generateNewCert(hostname, nil)
-		err = ioutil.WriteFile("./CAfile.txt", c, 0644)
-		err = ioutil.WriteFile("./CAkey.txt", k, 0644)
-		err = ioutil.WriteFile("./CAfile.der", rootCACertDER, 0644)
-		rootCAs.AddCert(rootCACert)
-	} else {
-		fmt.Printf("Using EXISTING Root Cerificate Authority\n")
-		ok := rootCAs.AppendCertsFromPEM(rootPEM)
-		if !ok {
-			log.Printf("Failed to Parse cert: %s\n", err)
-			os.Exit(1)
-		}
+		log.Printf("Failed to read cert der file: %s\n", err)
+		os.Exit(1)
+	}
+	rootCACert, err = x509.ParseCertificate(rootCACertDER)
+	if err != nil {
+		log.Printf("Failed to Parse cert der file: %s\n", err)
+		os.Exit(1)
+	}
 
-		rootCACertDER, err := ioutil.ReadFile("./CAfile.der")
-		if err != nil {
-			log.Printf("Failed to read cert der file: %s\n", err)
-			os.Exit(1)
-		}
-		rootCACert, err = x509.ParseCertificate(rootCACertDER)
-		if err != nil {
-			log.Printf("Failed to Parse cert der file: %s\n", err)
-			os.Exit(1)
-		}
+	c, err = ioutil.ReadFile(*caCert)
+	if err != nil {
+		log.Printf("Failed to read cert PEM  file: %s\n", err)
+		os.Exit(1)
+	}
 
-		c, err = ioutil.ReadFile("./CAfile.txt")
-		if err != nil {
-			log.Printf("Failed to read cert PEM  file: %s\n", err)
-			os.Exit(1)
-		}
-
-		k, err = ioutil.ReadFile("./CAkey.txt")
-		if err != nil {
-			log.Printf("Failed to read key  PEM  file: %s\n", err)
-			os.Exit(1)
-		}
+	k, err = ioutil.ReadFile(*caKey)
+	if err != nil {
+		log.Printf("Failed to read key  PEM  file: %s\n", err)
+		os.Exit(1)
 	}
 
 	if rootCACert == nil {
@@ -286,6 +216,9 @@ func main() {
 	var currentVersion uint16
 	done := make(chan struct{})
 
+	splitDomains, err := goca.SplitDomains(*domains)
+	splitIPAddresses, err := goca.SplitIPAddresses(*ipAddresses)
+
 	go func() {
 		ticker := time.NewTicker(5000 * time.Millisecond)
 		defer ticker.Stop()
@@ -294,16 +227,22 @@ func main() {
 			select {
 			case <-ticker.C:
 				log.Printf("Generating new certificates.\n")
-				cert, key, _, _, err := generateNewCert(hostname, rootCACert)
+				_, key, certDER, keyDER, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
 				if err != nil {
 					fmt.Printf("error when generating new cert: %v", err)
 					continue
 				} else {
+					certPEM := pem.EncodeToMemory(&pem.Block{
+						Type: "CERTIFICATE", Bytes: certDER})
+
+					keyPEM := pem.EncodeToMemory(&pem.Block{
+						Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+
 					if clientCount == 0 {
 						// Only write it if it doesn't exist... otherwise we overwrite an installed KeyChain trusted Cert/Key
 						if _, err := os.Stat("./clientCert-0.txt"); os.IsNotExist(err) {
-							err = ioutil.WriteFile(fmt.Sprintf("./clientCert-%d.txt", clientCount), cert, 0644)
-							err = ioutil.WriteFile(fmt.Sprintf("./clientKey-%d.txt", clientCount), key, 0644)
+							err = ioutil.WriteFile(fmt.Sprintf("./clientCert-%d.txt", clientCount), certPEM, 0644)
+							err = ioutil.WriteFile(fmt.Sprintf("./clientKey-%d.txt", clientCount), keyPEM, 0644)
 						}
 						clientCount++
 					}
@@ -312,7 +251,7 @@ func main() {
 				currentVersion = tls.VersionSSL30
 
 				// trivial example of setting a value in the configController...
-				err = configController.Set(hostname, currentVersion, cert, key, *overrideCAForConfig)
+				err = configController.Set(hostname, currentVersion, certDER, keyDER, *overrideCAForConfig)
 				if err != nil {
 					fmt.Printf("error when loading cert: %v", err)
 				}
