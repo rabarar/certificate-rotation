@@ -26,14 +26,14 @@ func main() {
 	if *useCA {
 		log.Printf("Using CA CertKey\n")
 		cert, err = tls.LoadX509KeyPair("../config_rot/goca.pem", "../config/goca-key.pem")
-		if err!=nil {
-				log.Fatal(err)
+		if err != nil {
+			log.Fatal(err)
 		}
 	} else {
 		log.Printf("Using cert-0/key-0\n")
 		cert, err = tls.LoadX509KeyPair("../config_rot/cert-0.pem", "../config_rot/key-0.pem")
-		if err!=nil {
-				log.Fatal(err)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
@@ -43,11 +43,11 @@ func main() {
 
 	rootPEM, err := ioutil.ReadFile("../config_rot/goca.pem")
 	if err != nil {
-			log.Fatal(err)
+		log.Fatal(err)
 	}
 	roots, err := x509.SystemCertPool()
 	if err != nil {
-			log.Fatal(err)
+		log.Fatal(err)
 	}
 	ok := roots.AppendCertsFromPEM([]byte(rootPEM))
 	if !ok {
@@ -55,10 +55,11 @@ func main() {
 	}
 
 	conn, err := tls.Dial("tcp", hostname+":8000", &tls.Config{
-		RootCAs:            roots,
-		Certificates:       []tls.Certificate{cert},
-		InsecureSkipVerify: false,
-		ServerName:         hostname,
+		RootCAs:               roots,
+		Certificates:          []tls.Certificate{cert},
+		InsecureSkipVerify:    false,
+		ServerName:            hostname,
+		VerifyPeerCertificate: verifyServer,
 	})
 	if err != nil {
 		panic("failed to connect: " + err.Error())
@@ -76,4 +77,14 @@ func main() {
 	conn.Close()
 	fmt.Printf("closed\n")
 
+}
+
+func verifyServer(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	if len(verifiedChains) > 0 {
+		fmt.Printf("Server Serial No: %s\n", verifiedChains[0][0].SerialNumber.String())
+	} else {
+		fmt.Printf("No verified chains\n")
+	}
+
+	return nil
 }

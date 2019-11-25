@@ -30,6 +30,19 @@ type configController struct {
 	caCertPEM []byte
 	caKeyPEM  []byte
 	caCert    *tls.Certificate
+	cert509   *x509.Certificate
+}
+
+// CertificateInfo returns a string describing the certificate
+func CertificateInfo(cert *x509.Certificate) string {
+	if cert.Subject.CommonName == cert.Issuer.CommonName {
+		return fmt.Sprintf("    Self-signed certificate %v\n", cert.Issuer.CommonName)
+	}
+
+	s := fmt.Sprintf("    Subject %v\n", cert.DNSNames)
+	s += fmt.Sprintf("    Serial No  %s\n", cert.SerialNumber.String())
+	s += fmt.Sprintf("    Issued by %s\n", cert.Issuer.CommonName)
+	return s
 }
 
 func (c *configController) Get() *tls.Config {
@@ -46,7 +59,7 @@ func (c *configController) SaveCACertKey(cert, key []byte) {
 	defer c.Unlock()
 }
 
-func (c *configController) Set(hostname string, version uint16, cert, key []byte, override bool) error {
+func (c *configController) Set(hostname string, version uint16, cert509 *x509.Certificate, cert, key []byte, override bool) error {
 	c.Lock()
 	defer c.Unlock()
 
@@ -58,6 +71,7 @@ func (c *configController) Set(hostname string, version uint16, cert, key []byte
 	} else {
 		log.Printf("Using Newly Generated Certs \n")
 		certAndKey, err = tls.X509KeyPair(cert, key)
+		log.Print(CertificateInfo(cert509))
 	}
 	if err != nil {
 		return err
@@ -229,7 +243,7 @@ func main() {
 
 				var certPEM, keyPEM []byte
 				log.Printf("Generating new certificates.\n")
-				_, key, certDER, _, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
+				cert509, key, certDER, _, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
 				if err != nil {
 					fmt.Printf("error when generating new cert: %v", err)
 					continue
@@ -259,7 +273,7 @@ func main() {
 				currentVersion = tls.VersionSSL30
 
 				// trivial example of setting a value in the configController...
-				err = configController.Set(hostname, currentVersion, certPEM, keyPEM, *overrideCAForConfig)
+				err = configController.Set(hostname, currentVersion, cert509, certPEM, keyPEM, *overrideCAForConfig)
 				if err != nil {
 					fmt.Printf("error when loading cert: %v", err)
 				}
