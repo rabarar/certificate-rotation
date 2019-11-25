@@ -2,3 +2,7 @@ pkg
 src
 *.txt
 *.der
+config_rot/config_rot
+config_rot/*.pem
+dial/dial
+
