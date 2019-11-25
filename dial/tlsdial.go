@@ -25,18 +25,30 @@ func main() {
 	var cert tls.Certificate
 	if *useCA {
 		log.Printf("Using CA CertKey\n")
-		cert, err = tls.LoadX509KeyPair("./CAfile.txt", "./CAkey.txt")
+		cert, err = tls.LoadX509KeyPair("../config_rot/goca.pem", "../config/goca-key.pem")
+		if err!=nil {
+				log.Fatal(err)
+		}
 	} else {
-		log.Printf("Using Client-0 CertKey\n")
-		cert, err = tls.LoadX509KeyPair("./clientCert-0.txt", "./clientKey-0.txt")
+		log.Printf("Using cert-0/key-0\n")
+		cert, err = tls.LoadX509KeyPair("../config_rot/cert-0.pem", "../config_rot/key-0.pem")
+		if err!=nil {
+				log.Fatal(err)
+		}
 	}
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	rootPEM, err := ioutil.ReadFile("./CAfile.txt")
-	roots := x509.NewCertPool()
+	rootPEM, err := ioutil.ReadFile("../config_rot/goca.pem")
+	if err != nil {
+			log.Fatal(err)
+	}
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+			log.Fatal(err)
+	}
 	ok := roots.AppendCertsFromPEM([]byte(rootPEM))
 	if !ok {
 		panic("failed to parse root certificate")

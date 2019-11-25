@@ -226,23 +226,31 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
+
+				var certPEM, keyPEM []byte
 				log.Printf("Generating new certificates.\n")
-				_, key, certDER, keyDER, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
+				_, key, certDER, _, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
 				if err != nil {
 					fmt.Printf("error when generating new cert: %v", err)
 					continue
 				} else {
-					certPEM := pem.EncodeToMemory(&pem.Block{
+					certPEM = pem.EncodeToMemory(&pem.Block{
 						Type: "CERTIFICATE", Bytes: certDER})
 
-					keyPEM := pem.EncodeToMemory(&pem.Block{
+					keyPEM = pem.EncodeToMemory(&pem.Block{
 						Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 
 					if clientCount == 0 {
 						// Only write it if it doesn't exist... otherwise we overwrite an installed KeyChain trusted Cert/Key
-						if _, err := os.Stat("./clientCert-0.txt"); os.IsNotExist(err) {
-							err = ioutil.WriteFile(fmt.Sprintf("./clientCert-%d.txt", clientCount), certPEM, 0644)
-							err = ioutil.WriteFile(fmt.Sprintf("./clientKey-%d.txt", clientCount), keyPEM, 0644)
+						if _, err := os.Stat("./cert-0.pem"); os.IsNotExist(err) {
+							err = ioutil.WriteFile(fmt.Sprintf("./cert-%d.pem", clientCount), certPEM, 0644)
+							if err != nil {
+								fmt.Print("failed to write certfile: %s\n", err)
+							}
+							err = ioutil.WriteFile(fmt.Sprintf("./key-%d.pem", clientCount), keyPEM, 0644)
+							if err != nil {
+								fmt.Print("failed to write keyfile: %s\n", err)
+							}
 						}
 						clientCount++
 					}
@@ -251,7 +259,7 @@ func main() {
 				currentVersion = tls.VersionSSL30
 
 				// trivial example of setting a value in the configController...
-				err = configController.Set(hostname, currentVersion, certDER, keyDER, *overrideCAForConfig)
+				err = configController.Set(hostname, currentVersion, certPEM, keyPEM, *overrideCAForConfig)
 				if err != nil {
 					fmt.Printf("error when loading cert: %v", err)
 				}
