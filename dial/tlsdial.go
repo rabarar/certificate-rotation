@@ -3,10 +3,14 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
+
+	"github.com/rabarar/goca"
 )
 
 func main() {
@@ -18,10 +22,24 @@ func main() {
 
 	var hostname string
 	useCA := flag.Bool("useCACerts", false, "use CA Certs instead of dynamically generated cert/key for config")
+	dynamicCerts := flag.Bool("dynamicCerts", false, "generate a new cert and dial away")
+	caKey := flag.String("ca-key", "goca-key.pem", "Root private key filename, PEM encoded.")
+	caCert := flag.String("ca-cert", "goca.pem", "Root certificate filename, PEM encoded.")
+
 	flag.StringVar(&hostname, "host", "localhost", "hostname to use for X509 Certificate Common Name")
+	domains := flag.String("domains", "", "Comma separated domain names to include as Server Alternative Names.")
+	ipAddresses := flag.String("ip-addresses", "", "Comma separated IP addresses to include as Server Alternative Names.")
 	flag.Parse()
 
-	var err error
+	splitDomains, err := goca.SplitDomains(*domains)
+	splitIPAddresses, err := goca.SplitIPAddresses(*ipAddresses)
+
+	issuer, err := goca.GetIssuer(*caKey, *caCert)
+	if err != nil {
+		fmt.Printf("failed to get issuer cert or key\n")
+		os.Exit(1)
+	}
+
 	var cert tls.Certificate
 	if *useCA {
 		log.Printf("Using CA CertKey\n")
@@ -54,29 +72,61 @@ func main() {
 		panic("failed to parse root certificate")
 	}
 
-	conn, err := tls.Dial("tcp", hostname+":8000", &tls.Config{
-		RootCAs:               roots,
-		Certificates:          []tls.Certificate{cert},
-		InsecureSkipVerify:    false,
-		ServerName:            hostname,
-		VerifyPeerCertificate: verifyServer,
-	})
-	if err != nil {
-		panic("failed to connect: " + err.Error())
-	} else {
-		fmt.Printf("connection Dialed, attempting to write...\n")
-	}
+	for {
 
-	var data []byte = make([]byte, 1024)
-	_, err = conn.Read(data)
-	if err != nil {
-		fmt.Printf("Err reading on conn: %s\n", err)
-	} else {
-		fmt.Printf("read: [%s]\n", data)
-	}
-	conn.Close()
-	fmt.Printf("closed\n")
+		if *dynamicCerts {
 
+			var certPEM, keyPEM []byte
+			log.Printf("Generating new certificates.\n")
+			_, key, certDER, _, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
+			if err != nil {
+				fmt.Printf("error when generating new cert: %v", err)
+				continue
+			} else {
+				certPEM = pem.EncodeToMemory(&pem.Block{
+					Type: "CERTIFICATE", Bytes: certDER})
+
+				keyPEM = pem.EncodeToMemory(&pem.Block{
+					Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+
+				cert, err = tls.X509KeyPair(certPEM, keyPEM)
+				if err != nil {
+					fmt.Printf("can't create keypair: %s\n", err)
+					break
+				}
+			}
+
+		}
+
+		fmt.Printf("dialing...\n")
+		conn, err := tls.Dial("tcp", hostname+":8000", &tls.Config{
+			RootCAs:               roots,
+			Certificates:          []tls.Certificate{cert},
+			InsecureSkipVerify:    false,
+			ServerName:            hostname,
+			VerifyPeerCertificate: verifyServer,
+		})
+		if err != nil {
+			panic("failed to connect: " + err.Error())
+		} else {
+			fmt.Printf("connection Dialed, attempting to write...\n")
+		}
+
+		var data []byte = make([]byte, 1024)
+		_, err = conn.Read(data)
+		if err != nil {
+			fmt.Printf("Err reading on conn: %s\n", err)
+		} else {
+			fmt.Printf("read: [%s]\n", data)
+		}
+
+		conn.Close()
+		fmt.Printf("closed\n")
+
+		if !*dynamicCerts {
+			break
+		}
+	}
 }
 
 func verifyServer(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
