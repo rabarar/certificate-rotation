@@ -156,6 +156,7 @@ func main() {
 	var caCertDER = flag.String("ca-cert-der", "goca.der", "Root certificate filename, DER encoded.")
 	var domains = flag.String("domains", "", "Comma separated domain names to include as Server Alternative Names.")
 	var ipAddresses = flag.String("ip-addresses", "", "Comma separated IP addresses to include as Server Alternative Names.")
+	var resetTime = flag.Int("cycle", 500, "Certificate Cycle Time. Regenerate a new Cert very cycle (in millisecodns")
 
 	flag.StringVar(&hostname, "host", "localhost", "hostname to use for X509 Certificate Common Name")
 	overrideCAForConfig := flag.Bool("useCACerts", false, "use CA Certs instead of dynamically generated cert/key for config")
@@ -234,7 +235,7 @@ func main() {
 	splitIPAddresses, err := goca.SplitIPAddresses(*ipAddresses)
 
 	go func() {
-		ticker := time.NewTicker(5000 * time.Millisecond)
+		ticker := time.NewTicker(time.Duration(*resetTime) * time.Millisecond)
 		defer ticker.Stop()
 		clientCount := 0
 		for {

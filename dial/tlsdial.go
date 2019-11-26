@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"time"
 
 	"github.com/rabarar/goca"
 )
@@ -23,12 +24,14 @@ func main() {
 	var hostname string
 	useCA := flag.Bool("useCACerts", false, "use CA Certs instead of dynamically generated cert/key for config")
 	dynamicCerts := flag.Bool("dynamicCerts", false, "generate a new cert and dial away")
-	caKey := flag.String("ca-key", "goca-key.pem", "Root private key filename, PEM encoded.")
-	caCert := flag.String("ca-cert", "goca.pem", "Root certificate filename, PEM encoded.")
+	caKey := flag.String("ca-key", "../config_rot/goca-key.pem", "Root private key filename, PEM encoded.")
+	caCert := flag.String("ca-cert", "../config_rot/goca.pem", "Root certificate filename, PEM encoded.")
 
-	flag.StringVar(&hostname, "host", "localhost", "hostname to use for X509 Certificate Common Name")
+	flag.StringVar(&hostname, "host", "mbp2019.local", "hostname to use for X509 Certificate Common Name")
 	domains := flag.String("domains", "", "Comma separated domain names to include as Server Alternative Names.")
 	ipAddresses := flag.String("ip-addresses", "", "Comma separated IP addresses to include as Server Alternative Names.")
+	resetTime := flag.Int("cycle", 500, "Certificate Cycle Time. Regenerate a new Cert very cycle (in millisecodns")
+
 	flag.Parse()
 
 	splitDomains, err := goca.SplitDomains(*domains)
@@ -125,6 +128,8 @@ func main() {
 
 		if !*dynamicCerts {
 			break
+		} else {
+			time.Sleep(time.Millisecond * time.Duration(*resetTime))
 		}
 	}
 }
