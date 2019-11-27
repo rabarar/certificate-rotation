@@ -6,3 +6,4 @@ config_rot/config_rot
 config_rot/*.pem
 dial/dial
 secrets/secret
+dial_secret/dial_secret

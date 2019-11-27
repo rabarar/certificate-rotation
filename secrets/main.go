@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
 	"flag"
@@ -34,23 +33,6 @@ func CertificateInfo(cert *x509.Certificate) string {
 	s += fmt.Sprintf("    Serial No  %s\n", cert.SerialNumber.String())
 	s += fmt.Sprintf("    Issued by %s\n", cert.Issuer.CommonName)
 	return s
-}
-
-func generatePKIXName(serial int64, organization []byte, common string) pkix.Name {
-
-	var pkixName pkix.Name
-
-	pkixName.Country = []string{"US"}
-	pkixName.Organization = []string{string(organization)}
-	pkixName.OrganizationalUnit = []string{"Department A"}
-	pkixName.Locality = []string{"Local B"}
-	pkixName.Province = []string{"Provice C"}
-	pkixName.StreetAddress = []string{"Street D"}
-	pkixName.PostalCode = []string{"21227"}
-	pkixName.SerialNumber = strconv.Itoa(int(serial))
-	pkixName.CommonName = common
-
-	return pkixName
 }
 
 func getClientValidator(helloInfo *tls.ClientHelloInfo) func([][]byte, [][]*x509.Certificate) error {
@@ -88,13 +70,13 @@ func getClientValidator(helloInfo *tls.ClientHelloInfo) func([][]byte, [][]*x509
 
 func main() {
 
-	var hostname string
 	var caKey = flag.String("ca-key", "../config_rot/goca-key.pem", "Root private key filename, PEM encoded.")
 	var caCert = flag.String("ca-cert", "../config_rot/goca.pem", "Root certificate filename, PEM encoded.")
 	var domains = flag.String("domains", "", "Comma separated domain names to include as Server Alternative Names.")
 	var ipAddresses = flag.String("ip-addresses", "", "Comma separated IP addresses to include as Server Alternative Names.")
+	var hostname = flag.String("host", "mbp2019.local", "hostname to use for sercret server")
+	var port = flag.Int("port", 8080, "port to use for secret server")
 
-	flag.StringVar(&hostname, "host", "localhost", "hostname to use for X509 Certificate Common Name")
 	flag.Parse()
 
 	issuer, err := goca.GetIssuer(*caKey, *caCert)
@@ -144,7 +126,7 @@ func main() {
 				ClientAuth:            tls.RequireAndVerifyClientCert,
 				ClientCAs:             rootCAs,
 				VerifyPeerCertificate: getClientValidator(hi),
-				ServerName:            hostname,
+				ServerName:            *hostname,
 			}
 			serverConf.BuildNameToCertificate()
 			return serverConf, nil
@@ -157,22 +139,42 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/foo", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
-		fmt.Fprintf(w, "foo-Hello, %q", html.EscapeString(req.URL.Path))
+
+		// print out url params
+		for k, v := range req.URL.Query() {
+			fmt.Printf("%s: %s\n", k, v)
+		}
+
+		switch req.Method {
+		case http.MethodGet:
+		case http.MethodPost:
+			w.Header().Add("content-type", "application/json")
+			reqBody, err := ioutil.ReadAll(req.Body)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("POST Body: [%s]\n", reqBody)
+			fmt.Fprintf(w, "{\"secret\":\"42\"}")
+		default:
+			w.WriteHeader(http.StatusNotImplemented)
+			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+		}
 	})
 
 	mux.HandleFunc("/bar", func(w http.ResponseWriter, req *http.Request) {
-		//w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
-		fmt.Fprintf(w, "bar-Hello, %q", html.EscapeString(req.URL.Path))
+		w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		fmt.Fprintf(w, "[%s]: bar-Hello, %q", req.Method, html.EscapeString(req.URL.Path))
 	})
 
 	srv := &http.Server{
 		TLSConfig:    config,
-		Addr:         ":8080",
+		Addr:         *hostname + ":" + strconv.Itoa(*port),
 		Handler:      mux, //myHandler,
 		ReadTimeout:  time.Minute,
 		WriteTimeout: time.Minute,
 	}
 
+	log.Printf("Starting Secret Server on %s\n", srv.Addr)
 	log.Fatal(srv.ListenAndServeTLS("", ""))
 }
 
