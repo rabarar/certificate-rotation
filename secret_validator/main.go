@@ -13,7 +13,9 @@ import (
 )
 
 var (
-	ErrNoKey error = errors.New("Key Exists, can't add")
+	ErrNoKey          error = errors.New("Key Exists, can't add")
+	ErrOTPAuthFailure error = errors.New("OTP Auth Failure")
+	ErrNoChains       error = errors.New("No Verified Chains")
 )
 
 const (
@@ -64,7 +66,7 @@ func (m *SecretHash) Verify(key, token string) (bool, error) {
 	otpVal, ok := m.hash[key]
 
 	if !ok {
-		return false, errors.New("No Key Exists")
+		return false, ErrNoKey
 	}
 
 	ok, err := otpVal.validator.Authenticate(token)
@@ -73,7 +75,7 @@ func (m *SecretHash) Verify(key, token string) (bool, error) {
 	fmt.Printf("EXPECTING: %06d - validating with [%s]\n", c, token)
 
 	if err != nil {
-		return false, errors.New("OTP Auth Failure")
+		return false, ErrOTPAuthFailure
 	}
 
 	return ok, nil
@@ -124,7 +126,7 @@ func getClientValidator(helloInfo *tls.ClientHelloInfo) func([][]byte, [][]*x509
 			}
 		} else {
 			log.Printf("No Verified Chains, can't verifiy...\n")
-			return errors.New("No Verified Chains")
+			return ErrNoChains
 		}
 	}
 }
