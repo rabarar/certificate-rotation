@@ -113,6 +113,7 @@ func main() {
 			panic("failed to connect: " + err.Error())
 		} else {
 			fmt.Printf("connection Dialed, attempting to write...\n")
+			fmt.Printf("OCSP Staple: [%x]\n", conn.OCSPResponse())
 		}
 
 		var data []byte = make([]byte, 1024)

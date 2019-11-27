@@ -140,6 +140,7 @@ func getClientValidator(helloInfo *tls.ClientHelloInfo) func([][]byte, [][]*x509
 				log.Printf("Verified failed: %s\n", err)
 			} else {
 				log.Printf("Verified\n")
+				log.Printf("DNSName: %s\n", strings.Split(helloInfo.Conn.RemoteAddr().String(), ":")[0])
 			}
 		} else {
 			log.Printf("No Verified Chains, can't verifiy...\n")
