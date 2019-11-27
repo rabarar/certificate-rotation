@@ -15,6 +15,7 @@ import (
 	"time"
 
 	cov "github.com/rabarar/covalid"
+	"github.com/rabarar/crypto/utils"
 	"github.com/rabarar/goca"
 )
 
@@ -85,7 +86,7 @@ func main() {
 
 	defer close(done)
 	certAndKey, err := tls.X509KeyPair(certPEM, keyPEM)
-	log.Print(CertificateInfo(cert509))
+	log.Print(utils.CertificateInfo(cert509))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(PATH_SECRET, func(w http.ResponseWriter, req *http.Request) {

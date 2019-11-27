@@ -1,7 +1,9 @@
 github.com/dgryski/dgoogauth v0.0.0-20190221195224-5a805980a5f3 h1:AqeKSZIG/NIC75MNQlPy/LM3LxfpLwahICJBHwSMFNc=
 github.com/dgryski/dgoogauth v0.0.0-20190221195224-5a805980a5f3/go.mod h1:hEfFauPHz7+NnjR/yHJGhrKo1Za+zStgwUETx3yzqgY=
-github.com/rabarar/certificate-rotation v0.0.1 h1:PdWUyXb6j7XEML73GPg+XZT61RTFe7fCTdSu5R99dns=
-github.com/rabarar/covalid v1.0.1 h1:F8m7shlEBR4Tz4X6p6p+iSPSBk+WDDSy7oW3i7WaL2A=
+github.com/rabarar/covalid v1.0.0 h1:fjeloLbvkNMUYtfKofMrY/G7W9P4a/mr+4zuRteJJG0=
+github.com/rabarar/covalid v1.0.0/go.mod h1:RNDdvmCq/kn/FPNtTnO+ewwaULw9pvBAQlHpy7RTB7A=
 github.com/rabarar/covalid v1.0.1/go.mod h1:RNDdvmCq/kn/FPNtTnO+ewwaULw9pvBAQlHpy7RTB7A=
+github.com/rabarar/crypto/utils v1.0.1 h1:oeGwZ0qvX5i+JBXUaAqigLLK8Td/FqFlBgk2HjZgm1A=
+github.com/rabarar/crypto/utils v1.0.1/go.mod h1:GtkFC2cXYFRacsiyHSktm5Mxilfwmt52Nts5H9mR5UQ=
 github.com/rabarar/goca v1.0.9 h1:ipgLViEuju9gLgmX0IE00hdziCO+AvW6SMoGqukZ/Uw=
 github.com/rabarar/goca v1.0.9/go.mod h1:EDh2/5DFtypvz6wsmFZ6gJBf8Z0RPqH3jbyewHzb5Jw=
