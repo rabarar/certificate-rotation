@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"time"
 
-	cov "github.com/rabarar/covalid"
+	cov "github.com/rabarar/crypto/covalid"
+	"github.com/rabarar/crypto/goca"
 	"github.com/rabarar/crypto/utils"
-	"github.com/rabarar/goca"
 )
 
 var (
