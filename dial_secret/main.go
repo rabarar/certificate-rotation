@@ -2,17 +2,22 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base32"
 	"encoding/pem"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"time"
 
+	otp "github.com/dgryski/dgoogauth"
 	"github.com/rabarar/goca"
 )
 
@@ -110,9 +115,28 @@ func main() {
 		},
 	}
 
-	fmt.Printf("Posting Secret for Serial: %s\n", cert509.SerialNumber.String())
+	// Create an otp
+	var postOTP otp.OTPConfig
+
+	// generate random secret
+	secret := make([]byte, 32)
+	rand.Read(secret)
+
+	postOTP.Secret = base32.StdEncoding.EncodeToString([]byte(secret))
+	postOTP.HotpCounter = 0
+	postOTP.WindowSize = 3
+
+	// Post a secret ...
+	fmt.Printf("Posting Secret[%s] for Serial: %s\n", postOTP.Secret, cert509.SerialNumber.String())
 	client := &http.Client{Transport: tr}
-	resp, err := client.Post(fmt.Sprintf("https://%s:%d/foo", *hostname, *port), "application/json", bytes.NewBuffer([]byte(fmt.Sprintf("{\"serial\":\"%s\"}", cert509.SerialNumber.String()))))
+
+	baseUrl, err := url.Parse(fmt.Sprintf("https://%s:%d/secret", *hostname, *port))
+	if err != nil {
+		log.Fatal("Malformed URL: ", err.Error())
+	}
+
+	resp, err := client.Post(baseUrl.String(), "application/json",
+		bytes.NewBuffer([]byte(fmt.Sprintf("{\"serial\":\"%s\", \"secret\":\"%s\"}", cert509.SerialNumber.String(), postOTP.Secret))))
 	if err != nil {
 		panic(err)
 	}
@@ -124,6 +148,31 @@ func main() {
 	} else {
 		log.Printf("Post Response: %s\n", body)
 	}
+
+	// Get verification
+	baseUrl, err = url.Parse(fmt.Sprintf("https://%s:%d/secret", *hostname, *port))
+	if err != nil {
+		log.Fatal("Malformed URL: ", err.Error())
+	}
+
+	// Prepare Query Parameters
+	params := url.Values{}
+	params.Add("key", cert509.SerialNumber.String())
+	params.Add("token", strconv.Itoa(otp.ComputeCode(postOTP.Secret, int64(time.Now().Unix()/30))))
+
+	// Add Query Parameters to the URL
+	baseUrl.RawQuery = params.Encode()
+	respGet, err := client.Get(baseUrl.String())
+	if err != nil {
+		panic(err)
+	}
+	defer respGet.Body.Close()
+	body, err = ioutil.ReadAll(respGet.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Printf("Body: [%s]\n", body)
 }
 
 func verifyServer(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
