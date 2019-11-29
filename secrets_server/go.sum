@@ -5,6 +5,8 @@ github.com/rabarar/covalid v1.0.0/go.mod h1:RNDdvmCq/kn/FPNtTnO+ewwaULw9pvBAQlHp
 github.com/rabarar/covalid v1.0.1/go.mod h1:RNDdvmCq/kn/FPNtTnO+ewwaULw9pvBAQlHpy7RTB7A=
 github.com/rabarar/crypto/covalid v1.1.2 h1:2dOaJJiuM8cqc/fNbTJc2TrYogdC3HDiQ28ncHNOhDk=
 github.com/rabarar/crypto/covalid v1.1.2/go.mod h1:awa1yL0B4xklcDVJFhU9AeZ6otPwsJGOta+9cXQGZEo=
+github.com/rabarar/crypto/covalid v1.1.3 h1:Gc0pRSQI69/aPUhmqhsCiMiXs5XhmsMgaLuOeS0dXOE=
+github.com/rabarar/crypto/covalid v1.1.3/go.mod h1:awa1yL0B4xklcDVJFhU9AeZ6otPwsJGOta+9cXQGZEo=
 github.com/rabarar/crypto/goca v1.1.2 h1:4zQ+0aCLGRQDjnBCH3EkOlMmF6I6VP48tAVG68z5R0M=
 github.com/rabarar/crypto/goca v1.1.2/go.mod h1:iOxf9YRjsD7eAzfcYZwfjfu5XzKu7eti7Jt4sQuGTDk=
 github.com/rabarar/crypto/utils v1.0.1 h1:oeGwZ0qvX5i+JBXUaAqigLLK8Td/FqFlBgk2HjZgm1A=

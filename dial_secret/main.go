@@ -2,10 +2,8 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base32"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -14,11 +12,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"time"
 
-	otp "github.com/dgryski/dgoogauth"
-	"github.com/rabarar/goca"
+	"github.com/rabarar/crypto/goca"
 )
 
 func main() {
@@ -115,19 +111,8 @@ func main() {
 		},
 	}
 
-	// Create an otp
-	var postOTP otp.OTPConfig
-
-	// generate random secret
-	secret := make([]byte, 32)
-	rand.Read(secret)
-
-	postOTP.Secret = base32.StdEncoding.EncodeToString([]byte(secret))
-	postOTP.HotpCounter = 0
-	postOTP.WindowSize = 3
-
-	// Post a secret ...
-	fmt.Printf("Posting Secret[%s] for Serial: %s\n", postOTP.Secret, cert509.SerialNumber.String())
+	// Post to secret server with serial number and CN hash ...
+	fmt.Printf("Posting to Secret Server: Hash[%s] for SerialNo: %s\n", cert509.Subject.CommonName, cert509.SerialNumber.String())
 	client := &http.Client{Transport: tr}
 
 	baseUrl, err := url.Parse(fmt.Sprintf("https://%s:%d/secret", *hostname, *port))
@@ -135,8 +120,8 @@ func main() {
 		log.Fatal("Malformed URL: ", err.Error())
 	}
 
-	resp, err := client.Post(baseUrl.String(), "application/json",
-		bytes.NewBuffer([]byte(fmt.Sprintf("{\"serial\":\"%s\", \"secret\":\"%s\"}", cert509.SerialNumber.String(), postOTP.Secret))))
+	resp, err := client.Post(baseUrl.String(), "application/json", bytes.NewBuffer([]byte(fmt.Sprintf("{\"serial\":\"%s\", \"hash\":\"%s\"}", cert509.SerialNumber.String(), cert509.Subject.CommonName))))
+
 	if err != nil {
 		panic(err)
 	}
@@ -158,7 +143,7 @@ func main() {
 	// Prepare Query Parameters
 	params := url.Values{}
 	params.Add("key", cert509.SerialNumber.String())
-	params.Add("token", strconv.Itoa(otp.ComputeCode(postOTP.Secret, int64(time.Now().Unix()/30))))
+	params.Add("hash", cert509.Subject.CommonName)
 
 	// Add Query Parameters to the URL
 	baseUrl.RawQuery = params.Encode()
@@ -172,7 +157,7 @@ func main() {
 		panic(err)
 	}
 
-	log.Printf("Body: [%s]\n", body)
+	log.Printf("GET Body: [%s]\n", body)
 }
 
 func verifyServer(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {

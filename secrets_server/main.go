@@ -100,21 +100,19 @@ func main() {
 
 		params := req.URL.Query()
 		key := defaultURLValue(params["key"], "")
-		token := defaultURLValue(params["token"], "")
+		hash := defaultURLValue(params["hash"], "")
 
 		switch req.Method {
 		case http.MethodGet:
-			log.Printf("Verifiying: %s with %s\n", key, token)
-			ok, err := secrets.Verify(key, token)
+			log.Printf("GET Method: Verifying: %s with %s\n", key, hash)
+			ok := secrets.Verify(key, hash)
 
-			if err != nil {
-				log.Printf("error!: %s\n", err)
+			if ok {
+				log.Printf("ok!\n")
+				fmt.Fprintf(w, "{\"status\":\"ok\"}\n")
 			} else {
-				if ok {
-					log.Printf("ok!\n")
-				} else {
-					log.Printf("nope!\n")
-				}
+				log.Printf("nope!\n")
+				fmt.Fprintf(w, "{\"status\":\"fail\"}\n")
 			}
 
 		case http.MethodPost:
@@ -123,7 +121,7 @@ func main() {
 				log.Fatal(err)
 			}
 			fmt.Printf("POST Body: [%s]\n", reqBody)
-			// TODO - unmarshall JSON
+
 			var objmap map[string]string
 			err = json.Unmarshal(reqBody, &objmap)
 			if err != nil {
@@ -131,15 +129,12 @@ func main() {
 			}
 
 			key := objmap["serial"]
-			secret := objmap["secret"]
-			log.Printf("Adding Validator with secret:[%s]\n", secret)
 
-			validator := cov.NewOTPValidator(secret, cov.DefaultHOTPCounter, cov.DefaultWindowSize)
-			err = secrets.Add(key, validator)
+			hashStr, err := secrets.Add(key)
 			if err != nil {
 				fmt.Fprintf(w, "{\"status\":\"fail\"}\n")
 			} else {
-				fmt.Fprintf(w, "{\"status\":\"okay\", \"secret\":\"random-secret\"}")
+				fmt.Fprintf(w, fmt.Sprintf("{\"status\":\"okay\", \"hash\":\"%s\"}", hashStr))
 			}
 		default:
 			log.Printf("unkown method: %s\n", req.Method)

@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -79,23 +77,6 @@ func (c *configController) Set(hostname string, version uint16, cert509 *x509.Ce
 
 	c.config = goca.ValidationConfig(hostname, nil, certAndKey, rootCAs)
 	return nil
-}
-
-func generatePKIXName(serial int64, organization []byte, common string) pkix.Name {
-
-	var pkixName pkix.Name
-
-	pkixName.Country = []string{"US"}
-	pkixName.Organization = []string{string(organization)}
-	pkixName.OrganizationalUnit = []string{"Department A"}
-	pkixName.Locality = []string{"Local B"}
-	pkixName.Province = []string{"Provice C"}
-	pkixName.StreetAddress = []string{"Street D"}
-	pkixName.PostalCode = []string{"21227"}
-	pkixName.SerialNumber = strconv.Itoa(int(serial))
-	pkixName.CommonName = common
-
-	return pkixName
 }
 
 func getClientValidator(helloInfo *tls.ClientHelloInfo) func([][]byte, [][]*x509.Certificate) error {
