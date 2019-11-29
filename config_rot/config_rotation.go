@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rabarar/goca"
+	"github.com/rabarar/crypto/goca"
 )
 
 var (
@@ -77,29 +77,7 @@ func (c *configController) Set(hostname string, version uint16, cert509 *x509.Ce
 		return err
 	}
 
-	c.config = &tls.Config{
-		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-			log.Printf("\tcalling GetCertificate:\n")
-			return &certAndKey, nil
-		},
-		GetConfigForClient: func(hi *tls.ClientHelloInfo) (*tls.Config, error) {
-			log.Printf("calling GetConfigForClient:\n")
-			serverConf := &tls.Config{
-				Certificates:          []tls.Certificate{certAndKey},
-				MinVersion:            tls.VersionTLS12,
-				ClientAuth:            tls.RequireAndVerifyClientCert,
-				ClientCAs:             rootCAs,
-				VerifyPeerCertificate: getClientValidator(hi),
-				ServerName:            hostname,
-			}
-			serverConf.BuildNameToCertificate()
-			return serverConf, nil
-		},
-		PreferServerCipherSuites: true,
-		MinVersion:               version,
-		Certificates:             []tls.Certificate{certAndKey},
-	}
-
+	c.config = goca.ValidationConfig(hostname, nil, certAndKey, rootCAs)
 	return nil
 }
 
