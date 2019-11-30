@@ -124,7 +124,7 @@ func main() {
 	flag.Parse()
 
 	if *makeCA == true {
-		err := goca.MakeIssuer(*caKey, *caCert, *caCertDER)
+		err := goca.MakeIssuer(*caKey, *caCert, *caCertDER, nil)
 		if err != nil {
 			fmt.Printf("%s\n", err)
 			os.Exit(1)
@@ -204,7 +204,11 @@ func main() {
 
 				var certPEM, keyPEM []byte
 				log.Printf("Generating new certificates.\n")
-				cert509, key, certDER, _, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
+				cp := goca.GetDefaultCertificateParams()
+				cp.Domains = splitDomains
+				cp.IpAddresses = splitIPAddresses
+				cert509, key, certDER, _, err := goca.Sign(issuer, cp)
+
 				if err != nil {
 					fmt.Printf("error when generating new cert: %v", err)
 					continue

@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/rabarar/goca"
+	"github.com/rabarar/crypto/goca"
 )
 
 func main() {
@@ -81,7 +81,10 @@ func main() {
 
 			var certPEM, keyPEM []byte
 			log.Printf("Generating new certificates.\n")
-			_, key, certDER, _, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
+			cp := goca.GetDefaultCertificateParams()
+			cp.Domains = splitDomains
+			cp.IpAddresses = splitIPAddresses
+			_, key, certDER, _, err := goca.Sign(issuer, cp)
 			if err != nil {
 				fmt.Printf("error when generating new cert: %v", err)
 				continue

@@ -14,7 +14,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/rabarar/crypto/covalid"
 	"github.com/rabarar/crypto/goca"
+	"github.com/rabarar/crypto/utils"
 )
 
 func main() {
@@ -32,8 +34,14 @@ func main() {
 	port := flag.Int("port", 8080, "port to use for secret server")
 	domains := flag.String("domains", "", "Comma separated domain names to include as Server Alternative Names.")
 	ipAddresses := flag.String("ip-addresses", "", "Comma separated IP addresses to include as Server Alternative Names.")
+	identSerialNo := flag.String("ident-serial", "", "serial number of Identity Certificate.")
 
 	flag.Parse()
+
+	if *identSerialNo == "" {
+		fmt.Printf("Need to specify ident-serial number\n")
+		os.Exit(1)
+	}
 
 	splitDomains, err := goca.SplitDomains(*domains)
 	splitIPAddresses, err := goca.SplitIPAddresses(*ipAddresses)
@@ -78,8 +86,20 @@ func main() {
 
 	var certPEM, keyPEM []byte
 	log.Printf("Generating new certificates.\n")
+	serialNo, err := goca.NewSerialNumber()
+	if err != nil {
+		panic("failed to generate serial no.")
+	}
 
-	cert509, key, certDER, _, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
+	cp := goca.GetDefaultCertificateParams()
+
+	cp.Domains = splitDomains
+	cp.IpAddresses = splitIPAddresses
+	cp.UseValidatorHash = true
+	cp.ValidatorHash = []byte(*identSerialNo)
+	cp.SerialNumber = serialNo
+
+	cert509, key, certDER, _, err := covalid.SignWithValidator(issuer, covalid.PromptValidator, cp)
 	if err != nil {
 		fmt.Printf("error when generating new cert: %v", err)
 		panic(err)
@@ -98,7 +118,9 @@ func main() {
 		}
 	}
 
+	fmt.Printf("%s\n", utils.CertificateInfo(cert509))
 	tr := &http.Transport{
+
 		MaxIdleConns:       10,
 		IdleConnTimeout:    30 * time.Second,
 		DisableCompression: true,
@@ -112,7 +134,7 @@ func main() {
 	}
 
 	// Post to secret server with serial number and CN hash ...
-	fmt.Printf("Posting to Secret Server: Hash[%s] for SerialNo: %s\n", cert509.Subject.CommonName, cert509.SerialNumber.String())
+	fmt.Printf("Posting to Secret Server: Hash[%s] for SerialNo: %s\n", cert509.Subject.CommonName, *identSerialNo)
 	client := &http.Client{Transport: tr}
 
 	baseUrl, err := url.Parse(fmt.Sprintf("https://%s:%d/secret", *hostname, *port))
@@ -120,7 +142,7 @@ func main() {
 		log.Fatal("Malformed URL: ", err.Error())
 	}
 
-	resp, err := client.Post(baseUrl.String(), "application/json", bytes.NewBuffer([]byte(fmt.Sprintf("{\"serial\":\"%s\", \"hash\":\"%s\"}", cert509.SerialNumber.String(), cert509.Subject.CommonName))))
+	resp, err := client.Post(baseUrl.String(), "application/json", bytes.NewBuffer([]byte(fmt.Sprintf("{\"serial\":\"%s\", \"hash\":\"%s\"}", *identSerialNo, cert509.Subject.CommonName))))
 
 	if err != nil {
 		panic(err)
@@ -142,7 +164,7 @@ func main() {
 
 	// Prepare Query Parameters
 	params := url.Values{}
-	params.Add("key", cert509.SerialNumber.String())
+	params.Add("key", *identSerialNo)
 	params.Add("hash", cert509.Subject.CommonName)
 
 	// Add Query Parameters to the URL

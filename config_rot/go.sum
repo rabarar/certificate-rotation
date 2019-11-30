@@ -2,6 +2,10 @@ github.com/rabarar/crypto/goca v1.1.3 h1:MaM/Ak+oVMFR+eNPvE9gNOy6gAvAXADV9hUfI7Y
 github.com/rabarar/crypto/goca v1.1.3/go.mod h1:iOxf9YRjsD7eAzfcYZwfjfu5XzKu7eti7Jt4sQuGTDk=
 github.com/rabarar/crypto/goca v1.1.4 h1:BIsnYviZJGm49UCmhd5TeTztIcM5IyRKV93x6WVCF5E=
 github.com/rabarar/crypto/goca v1.1.4/go.mod h1:iOxf9YRjsD7eAzfcYZwfjfu5XzKu7eti7Jt4sQuGTDk=
+github.com/rabarar/crypto/goca v1.1.8 h1:wETAcYkmLkQBmtkjtjctSGEDOjk8P0jmkPXM3KLIsXI=
+github.com/rabarar/crypto/goca v1.1.8/go.mod h1:iOxf9YRjsD7eAzfcYZwfjfu5XzKu7eti7Jt4sQuGTDk=
+github.com/rabarar/crypto/goca v1.1.9 h1:FlIJhPucsTG9GT68pOAz+ypxcf0bwj/lk25sIg3zSvQ=
+github.com/rabarar/crypto/goca v1.1.9/go.mod h1:iOxf9YRjsD7eAzfcYZwfjfu5XzKu7eti7Jt4sQuGTDk=
 github.com/rabarar/goca v1.0.5 h1:716EjDwy+9QbW6G/kNS+bNjKVnZkXXXFndIekC6YPIA=
 github.com/rabarar/goca v1.0.5/go.mod h1:EDh2/5DFtypvz6wsmFZ6gJBf8Z0RPqH3jbyewHzb5Jw=
 github.com/rabarar/goca v1.0.6 h1:cOV+yuMHXKIFb/VBqk6K5B2Tg4CcEoHBtCk8a6GT7t8=

@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
 	"flag"
@@ -27,7 +28,8 @@ var (
 )
 
 const (
-	PATH_SECRET = "/secret"
+	PATH_SECRET    = "/secret"
+	PATH_VALIDATOR = "/validator"
 )
 
 func defaultURLValue(val []string, defvalue string) string {
@@ -72,7 +74,18 @@ func main() {
 
 	var certPEM, keyPEM []byte
 	log.Printf("Generating new certificates.\n")
-	cert509, key, certDER, _, err := goca.Sign(issuer, splitDomains, splitIPAddresses)
+
+	cp := &goca.CertificateParams{}
+	cp.Domains = splitDomains
+	cp.IpAddresses = splitIPAddresses
+	cp.SerialNumber, _ = goca.NewSerialNumber()
+	cp.KeyUsage = goca.DefaultKeyUsage
+	cp.ExtKeyUsage = goca.DefaultExtKeyUsage
+	cp.NotBefore = time.Now()
+	cp.NotAfter = cp.NotBefore.AddDate(100, 0, 0)
+	cp.Subject = pkix.Name{CommonName: "SecretServer"}
+
+	cert509, key, certDER, _, err := goca.Sign(issuer, cp)
 	if err != nil {
 		fmt.Printf("error when generating new cert: %v", err)
 	} else {
@@ -89,6 +102,26 @@ func main() {
 	log.Print(utils.CertificateInfo(cert509))
 
 	mux := http.NewServeMux()
+	mux.HandleFunc(PATH_VALIDATOR, func(w http.ResponseWriter, req *http.Request) {
+
+		if len(req.TLS.VerifiedChains[0]) > 0 {
+			//.SerialNumber.String()
+
+			otpQRCode, err := secrets.AddIdentity(req.TLS.VerifiedChains[0][0].SerialNumber.String())
+			if err != nil {
+				fmt.Fprintf(w, "{\"status\":\"fail\"}\n")
+			} else {
+				w.Header().Set("Content-Type", "image/png")
+				w.Header().Set("Content-Length", strconv.Itoa(len(otpQRCode)))
+				if _, err := w.Write(otpQRCode); err != nil {
+					log.Println("unable to write image.")
+				}
+			}
+		} else {
+			w.Write([]byte("no verified chains, no qr code written"))
+		}
+	})
+
 	mux.HandleFunc(PATH_SECRET, func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		w.Header().Add("content-type", "application/json")
