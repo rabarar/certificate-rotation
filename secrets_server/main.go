@@ -54,7 +54,7 @@ func main() {
 
 	issuer, err := goca.GetIssuer(*caKey, *caCert)
 	if err != nil {
-		fmt.Printf("failed to get issuer cert or key\n")
+		log.Printf("failed to get issuer cert or key\n")
 		os.Exit(1)
 	}
 
@@ -87,7 +87,7 @@ func main() {
 
 	cert509, key, certDER, _, err := goca.Sign(issuer, cp)
 	if err != nil {
-		fmt.Printf("error when generating new cert: %v", err)
+		log.Printf("Error when generating new cert: %v", err)
 	} else {
 		certPEM = pem.EncodeToMemory(&pem.Block{
 			Type: "CERTIFICATE", Bytes: certDER})
@@ -126,11 +126,6 @@ func main() {
 		w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		w.Header().Add("content-type", "application/json")
 
-		// print out url params
-		for k, v := range req.URL.Query() {
-			fmt.Printf("%s: %s\n", k, v)
-		}
-
 		params := req.URL.Query()
 		key := defaultURLValue(params["key"], "")
 		hash := defaultURLValue(params["hash"], "")
@@ -141,10 +136,10 @@ func main() {
 			ok := secrets.Verify(key, hash)
 
 			if ok {
-				log.Printf("ok!\n")
+				log.Printf("OTP Verified\n")
 				fmt.Fprintf(w, "{\"status\":\"ok\"}\n")
 			} else {
-				log.Printf("nope!\n")
+				log.Printf("OTP Verification Failed\n")
 				fmt.Fprintf(w, "{\"status\":\"fail\"}\n")
 			}
 
@@ -153,7 +148,8 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Printf("POST Body: [%s]\n", reqBody)
+			log.Printf("POST Body: [%s]\n", reqBody)
+			req.Body.Close()
 
 			var objmap map[string]string
 			err = json.Unmarshal(reqBody, &objmap)
@@ -170,7 +166,7 @@ func main() {
 				fmt.Fprintf(w, fmt.Sprintf("{\"status\":\"okay\", \"hash\":\"%s\"}", hashStr))
 			}
 		default:
-			log.Printf("unkown method: %s\n", req.Method)
+			log.Printf("Unkown method: %s\n", req.Method)
 			w.WriteHeader(http.StatusNotImplemented)
 			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
 		}

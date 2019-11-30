@@ -101,7 +101,7 @@ func main() {
 
 	cert509, key, certDER, _, err := covalid.SignWithValidator(issuer, covalid.PromptValidator, cp)
 	if err != nil {
-		fmt.Printf("error when generating new cert: %v", err)
+		log.Printf("error when generating new cert: %v", err)
 		panic(err)
 
 	} else {
@@ -113,7 +113,7 @@ func main() {
 
 		cert, err = tls.X509KeyPair(certPEM, keyPEM)
 		if err != nil {
-			fmt.Printf("can't create keypair: %s\n", err)
+			log.Printf("can't create keypair: %s\n", err)
 			panic(err)
 		}
 	}
@@ -134,7 +134,6 @@ func main() {
 	}
 
 	// Post to secret server with serial number and CN hash ...
-	fmt.Printf("Posting to Secret Server: Hash[%s] for SerialNo: %s\n", cert509.Subject.CommonName, *identSerialNo)
 	client := &http.Client{Transport: tr}
 
 	baseUrl, err := url.Parse(fmt.Sprintf("https://%s:%d/secret", *hostname, *port))
@@ -142,6 +141,7 @@ func main() {
 		log.Fatal("Malformed URL: ", err.Error())
 	}
 
+	log.Printf("Posting to Secret Server: Hash[%s] for SerialNo: %s\n", cert509.Subject.CommonName, *identSerialNo)
 	resp, err := client.Post(baseUrl.String(), "application/json", bytes.NewBuffer([]byte(fmt.Sprintf("{\"serial\":\"%s\", \"hash\":\"%s\"}", *identSerialNo, cert509.Subject.CommonName))))
 
 	if err != nil {
@@ -184,9 +184,9 @@ func main() {
 
 func verifyServer(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	if len(verifiedChains) > 0 {
-		fmt.Printf("Server Serial No: %s\n", verifiedChains[0][0].SerialNumber.String())
+		log.Printf("Server Serial No: %s\n", verifiedChains[0][0].SerialNumber.String())
 	} else {
-		fmt.Printf("No verified chains\n")
+		log.Printf("No verified chains\n")
 	}
 
 	return nil
