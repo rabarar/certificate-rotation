@@ -8,3 +8,4 @@ dial/dial
 secrets/secret
 secrets_server/secret
 dial_secret/dial_secret
+mkidentity/mkidentity

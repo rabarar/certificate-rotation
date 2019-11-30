@@ -1,0 +1,4 @@
+github.com/rabarar/crypto/goca v1.1.9 h1:FlIJhPucsTG9GT68pOAz+ypxcf0bwj/lk25sIg3zSvQ=
+github.com/rabarar/crypto/goca v1.1.9/go.mod h1:iOxf9YRjsD7eAzfcYZwfjfu5XzKu7eti7Jt4sQuGTDk=
+software.sslmate.com/src/go-pkcs12 v0.0.0-20190322163127-6e380ad96778 h1:bAjNYCeISA/jECGqIIIgnjfmpW5MxAwF/yfmy4RQWQ8=
+software.sslmate.com/src/go-pkcs12 v0.0.0-20190322163127-6e380ad96778/go.mod h1:/xvNRWUqm0+/ZMiF4EX00vrSCMsE4/NHb+Pt3freEeQ=
